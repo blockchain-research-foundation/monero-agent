@@ -360,7 +360,7 @@ def _ensure_dst_keyvect(dst=None, size=None):
 
 
 def const_vector(val, elems=BP_N):
-    return KeyVEval(elems=64, src=lambda x, d: copy_key(d, ONE))
+    return KeyVEval(elems=elems, src=lambda x, d: copy_key(d, val))
 
 
 def vector_exponent_custom(A, B, a, b, dst=None):
