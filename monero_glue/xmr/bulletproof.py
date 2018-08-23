@@ -359,6 +359,10 @@ def _ensure_dst_keyvect(dst=None, size=None):
     return dst
 
 
+def const_vector(val, elems=BP_N):
+    return KeyVEval(elems=64, src=lambda x, d: copy_key(d, ONE))
+
+
 def vector_exponent_custom(A, B, a, b, dst=None):
     dst = _ensure_dst_key(dst)
 
@@ -513,7 +517,7 @@ class BulletProofBuilder(object):
         self.proof_sec = None
         self.Gprec = KeyV(buffer=BP_GI_PRE, const=True)
         self.Hprec = KeyV(buffer=BP_HI_PRE, const=True)
-        self.oneN = KeyVEval(elems=64, src=lambda x, d: copy_key(d, ONE))
+        self.oneN = const_vector(ONE, 64)
         self.twoN = KeyV(buffer=BP_TWO_N, const=True)
         self.ip12 = BP_IP12
         self.v_aL = None
