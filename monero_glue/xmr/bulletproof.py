@@ -67,11 +67,13 @@ def _ensure_dst_key(dst=None):
 def copy_key(dst, src):
     for i in range(32):
         dst[i] = src[i]
+    return dst
 
 
 def copy_vector(dst, src):
     for i in range(len(src)):
         copy_key(dst[i], src[i])
+    return dst
 
 
 def invert(dst, x):
@@ -328,8 +330,7 @@ class KeyVEval(KeyV):
         self.mv = memoryview(self.buff)
 
     def __getitem__(self, item):
-        self.fnc(item, self.mv)
-        return self.mv
+        return self.fnc(item, self.mv)
 
     def __setitem__(self, key, value):
         raise ValueError("Constant vector")
