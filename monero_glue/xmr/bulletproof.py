@@ -799,22 +799,24 @@ def multiexp(dst=None, data=None, GiHi=False):
 class BulletProofBuilder(object):
     def __init__(self):
         self.use_det_masks = True
-        self.value = None
         self.value_enc = None
-        self.gamma = None
         self.gamma_enc = None
         self.proof_sec = None
+
         self.Gprec = KeyV(buffer=BP_GI_PRE, const=True)
         self.Hprec = KeyV(buffer=BP_HI_PRE, const=True)
         self.oneN = const_vector(ONE, 64)
         self.twoN = KeyV(buffer=BP_TWO_N, const=True)
         self.ip12 = BP_IP12
+
         self.v_aL = None
         self.v_aR = None
         self.v_sL = None
         self.v_sR = None
+
         self.tmp_sc_1 = crypto.new_scalar()
         self.tmp_det_buff = bytearray(64 + 1 + 4)
+        
         self.gc_fnc = gc.collect
         self.gc_trace = None
 
@@ -827,13 +829,6 @@ class BulletProofBuilder(object):
     def assrt(self, cond, msg=None, *args, **kwargs):
         if not cond:
             raise ValueError(msg)
-
-    def set_input(self, value=None, mask=None):
-        self.value = value
-        self.value_enc = crypto.encodeint(value)
-        self.gamma = mask
-        self.gamma_enc = crypto.encodeint(mask)
-        self.proof_sec = crypto.random_bytes(64)
 
     def aX(self, i, dst=None, is_a=True):
         dst = _ensure_dst_key(dst)
@@ -1141,7 +1136,7 @@ class BulletProofBuilder(object):
         self.v_sL = self.sL_vct()
         self.v_sR = self.sR_vct()
 
-    def prove(self):
+    def prove_testnet(self, sv, gamma):
         # Prover state
         V = _ensure_dst_key()
         A = _ensure_dst_key()
@@ -1156,6 +1151,10 @@ class BulletProofBuilder(object):
         hash_cache = _ensure_dst_key()
         aprime0 = _ensure_dst_key()
         bprime0 = _ensure_dst_key()
+
+        self.value_enc = crypto.encodeint(sv)
+        self.gamma_enc = crypto.encodeint(gamma)
+        self.proof_sec = crypto.random_bytes(64)
 
         L = _ensure_dst_keyvect(None, BP_LOG_N)
         R = _ensure_dst_keyvect(None, BP_LOG_N)
@@ -1185,6 +1184,9 @@ class BulletProofBuilder(object):
             b=bprime0,
             t=t,
         )
+
+    def prove(self, sv, gamma):
+        return self.prove_batch([sv], [gamma])
 
     def prove_batch(self, sv, gamma):
         self.assrt(len(sv) == len(gamma), "|sv| != |gamma|")
@@ -1506,7 +1508,7 @@ class BulletProofBuilder(object):
             t=t,
         )
 
-    def verify(self, proof):
+    def verify_testnet(self, proof):
         if len(proof.V) != 1:
             raise ValueError("len(V) != 1")
         if len(proof.L) != len(proof.R):
@@ -1662,6 +1664,9 @@ class BulletProofBuilder(object):
         if pprime != tmp:
             raise ValueError("Verification failure step 2")
         return True
+
+    def verify(self, proof):
+        return self.verify_batch([proof])
 
     def verify_batch(self, proofs):
         """
