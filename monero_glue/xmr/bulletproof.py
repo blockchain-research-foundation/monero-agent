@@ -285,17 +285,60 @@ def get_exponent(dst, base, idx):
 #
 
 
-class KeyV(object):
+class KeyVBase(object):
+    """
+    Base KeyVector object
+    """
+    def __init__(self, elems=64):
+        self.current_idx = 0
+        self.size = elems
+
+    def idxize(self, idx):
+        if idx < 0:
+            idx = self.size + idx
+        if idx >= self.size:
+            raise ValueError('Index out of bounds')
+        return idx
+
+    def __getitem__(self, item):
+        raise ValueError('Not supported')
+
+    def __setitem__(self, key, value):
+        raise ValueError('Not supported')
+
+    def __iter__(self):
+        self.current_idx = 0
+        return self
+
+    def __next__(self):
+        if self.current_idx >= self.size:
+            raise StopIteration
+        else:
+            self.current_idx += 1
+            return self[self.current_idx - 1]
+
+    def __len__(self):
+        return self.size
+
+    def slice(self, res, start, stop):
+        for i in range(start, stop):
+            res[i - start] = self[i]
+        return res
+
+    def slice_view(self, start, stop):
+        return KeyVSliced(self, start, stop)
+
+
+class KeyV(KeyVBase):
     """
     KeyVector abstraction
     Constant precomputed buffers = bytes, frozen. Same operation as normal.
     """
 
     def __init__(self, elems=64, src=None, buffer=None, const=False, no_init=False):
-        self.current_idx = 0
+        super().__init__(elems)
         self.d = None
         self.mv = None
-        self.size = elems
         self.const = const
         if no_init:
             pass
@@ -319,6 +362,7 @@ class KeyV(object):
         :param item:
         :return:
         """
+        item = self.idxize(item)
         return self.mv[item * 32 : (item + 1) * 32]
 
     def __setitem__(self, key, value):
@@ -333,25 +377,6 @@ class KeyV(object):
         ck = self[key]
         for i in range(32):
             ck[i] = value[i]
-
-    def __iter__(self):
-        self.current_idx = 0
-        return self
-
-    def __next__(self):
-        if self.current_idx >= self.size:
-            raise StopIteration
-        else:
-            self.current_idx += 1
-            return self[self.current_idx - 1]
-
-    def __len__(self):
-        return self.size
-
-    def slice(self, res, start, stop):
-        for i in range(start, stop):
-            res[i - start] = self[i]
-        return res
 
     def slice_r(self, start, stop):
         res = KeyV(stop - start)
@@ -380,76 +405,69 @@ class KeyV(object):
         self._set_mv()
 
 
-class KeyVEval(KeyV):
+class KeyVEval(KeyVBase):
     """
     KeyVector computed / evaluated on demand
     """
 
     def __init__(self, elems=64, src=None):
-        super().__init__(elems, no_init=True)
-        self.size = elems
+        super().__init__(elems)
         self.fnc = src
         self.buff = _ensure_dst_key()
         self.mv = memoryview(self.buff)
 
     def __getitem__(self, item):
-        return self.fnc(item, self.mv)
-
-    def __setitem__(self, key, value):
-        raise ValueError("Constant vector")
-
-    def slice(self, res, start, stop):
-        raise ValueError("Not supported")
-
-    def slice_r(self, start, stop):
-        raise ValueError("Not supported")
-
-    def copy(self, dst=None):
-        raise ValueError("Not supported")
-
-    def resize(self, nsize, chop=False):
-        raise ValueError("Not supported")
+        return self.fnc(self.idxize(item), self.mv)
 
 
-class KeyVSized(KeyV):
+class KeyVSized(KeyVBase):
     """
     Resized vector, wrapping possibly larger vector
     (e.g., precomputed, but has to have exact size for further computations)
     """
     def __init__(self, wrapped, new_size):
-        super().__init__(wrapped, no_init=True)
-        self.size = new_size
+        super().__init__(new_size)
         self.wrapped = wrapped
 
     def __getitem__(self, item):
-        return self.wrapped[item]
+        return self.wrapped[self.idxize(item)]
 
     def __setitem__(self, key, value):
-        self.wrapped[key] = value
-
-    def resize(self, nsize, chop=False):
-        raise ValueError('Not supported')
+        self.wrapped[self.idxize(key)] = value
 
 
-class KeyVPrecomp(KeyV):
+class KeyVPrecomp(KeyVBase):
     """
     Vector with possibly large size and some precomputed prefix.
     Usable for Gi vector with precomputed usual sizes (i.e., 2 output transactions)
     but possible to compute further
     """
     def __init__(self, size, precomp_prefix, aux_comp_fnc):
-        super().__init__(size, no_init=True)
-        self.size = size
+        super().__init__(size)
         self.precomp_prefix = precomp_prefix
         self.aux_comp_fnc = aux_comp_fnc
 
     def __getitem__(self, item):
+        item = self.idxize(item)
         if item < len(self.precomp_prefix):
             return self.precomp_prefix[item]
         return self.aux_comp_fnc(item, None)
 
+
+class KeyVSliced(KeyVBase):
+    """
+    Sliced in-memory vector version, remapping
+    """
+    def __init__(self, src, start, stop):
+        super().__init__(stop - start)
+        self.wrapped = src
+        self.offset = start
+
+    def __getitem__(self, item):
+        return self.wrapped[self.offset + self.idxize(item)]
+
     def __setitem__(self, key, value):
-        raise ValueError('Not supported')
+        self.wrapped[self.offset + self.idxize(key)] = value
 
     def resize(self, nsize, chop=False):
         raise ValueError('Not supported')
