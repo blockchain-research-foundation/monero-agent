@@ -1198,7 +1198,7 @@ class BulletProofBuilder(object):
         aL = KeyVEval(MN, lambda i, d: e_xL(i, d, True))
         aR = KeyVEval(MN, lambda i, d: e_xL(i, d, False))
 
-        hash_cache = hash_vct_to_scalar(None, V)
+        hash_cache = _ensure_dst_key()
         while True:
             self.gc(10)
             r = self._prove_batch_main(V, gamma, aL, aR, hash_cache, logM, logN, M, N)
@@ -1228,6 +1228,7 @@ class BulletProofBuilder(object):
     def _prove_batch_main(self, V, gamma, aL, aR, hash_cache, logM, logN, M, N):
         logMN = logM + logN
         MN = M * N
+        hash_vct_to_scalar(hash_cache, V)
 
         # Extended precomputed GiHi
         Gprec = self._gprec_aux(MN)
