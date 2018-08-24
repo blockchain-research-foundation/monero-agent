@@ -376,6 +376,7 @@ class KeyVEval(KeyV):
     """
 
     def __init__(self, elems=64, src=None):
+        super().__init__(elems)
         self.size = elems
         self.fnc = src
         self.buff = _ensure_dst_key()
@@ -398,6 +399,50 @@ class KeyVEval(KeyV):
 
     def resize(self, nsize, chop=False):
         raise ValueError("Not supported")
+
+
+class KeyVSized(KeyV):
+    """
+    Resized vector, wrapping possibly larger vector
+    (e.g., precomputed, but has to have exact size for further computations)
+    """
+    def __init__(self, wrapped, new_size):
+        super().__init__(wrapped)
+        self.size = new_size
+        self.wrapped = wrapped
+
+    def __getitem__(self, item):
+        return self.wrapped[item]
+
+    def __setitem__(self, key, value):
+        self.wrapped[key] = value
+
+    def resize(self, nsize, chop=False):
+        raise ValueError('Not supported')
+
+
+class KeyVPrecomp(KeyV):
+    """
+    Vector with possibly large size and some precomputed prefix.
+    Usable for Gi vector with precomputed usual sizes (i.e., 2 output transactions)
+    but possible to compute further
+    """
+    def __init__(self, size, precomp_prefix, aux_comp_fnc):
+        super().__init__(size)
+        self.size = size
+        self.precomp_prefix = precomp_prefix
+        self.aux_comp_fnc = aux_comp_fnc
+
+    def __getitem__(self, item):
+        if item < len(self.precomp_prefix):
+            return self.precomp_prefix[item]
+        return self.aux_comp_fnc(item, None)
+
+    def __setitem__(self, key, value):
+        raise ValueError('Not supported')
+
+    def resize(self, nsize, chop=False):
+        raise ValueError('Not supported')
 
 
 def _ensure_dst_keyvect(dst=None, size=None):
