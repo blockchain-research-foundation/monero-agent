@@ -569,6 +569,130 @@ def init_constants():
     return Gi, GiB, Hi, HiB, oneN, oneNB, twoN, twoNB, ip12, ip12B
 
 
+class MultiExp(object):
+    def __init__(self, size=None, scalars=None, points=None, scalar_fnc=None, point_fnc=None):
+        self.size = size if size else None
+        self.current_idx = 0
+
+        self.scalars = scalars if scalars else []
+        self.points = points if points else []
+        self.scalar_fnc = scalar_fnc
+        self.point_fnc = point_fnc
+        if (scalars or points) and size is None:
+            self.size = max(len(scalars) if scalars else 0, len(points) if points else 0)
+
+    def add_pair(self, scalar, point):
+        self.scalars.append(scalar)
+        self.points.append(point)
+        self.size = len(self.points)
+
+    def add_scalar(self, scalar):
+        self.scalars.append(scalar)
+        self.size = len(self.points)
+
+    def get_idx(self, idx):
+        dst_scalar = None
+        dst_point = None
+
+        if idx >= len(self.scalars):
+            dst_scalar = self.scalar_fnc(idx, None)
+        else:
+            dst_scalar = self.scalars[idx]
+
+        if idx >= len(self.points):
+            dst_point = self.point_fnc(idx, None)
+        else:
+            dst_point = self.points[idx]
+
+        return dst_scalar, dst_point
+
+    def __getitem__(self, item):
+        return self.get_idx(item)
+
+    def __setitem__(self, key, value):
+        raise ValueError('Not supported')
+
+    def __iter__(self):
+        self.current_idx = 0
+        return self
+
+    def __next__(self):
+        if self.current_idx >= self.size:
+            raise StopIteration
+        else:
+            self.current_idx += 1
+            return self[self.current_idx - 1]
+
+    def __len__(self):
+        return self.size
+
+
+class MergedMultiExp(object):
+    def __init__(self, *args):
+        self.current_idx = 0
+        self.exps = args if len(args) > 0 else []
+        self.size = 0
+        self.bnds = [0]
+        for x in args:
+            self.size += len(x)
+            self.bnds.append(self.bnds[-1] + len(x))
+
+    def add(self, exp):
+        self.exps.append(exp)
+        self.size += len(exp)
+        self.bnds.append(self.bnds[-1] + len(exp))
+        return self
+
+    def _get_chunk(self, idx):
+        if idx >= self.size:
+            raise ValueError('Out of bounds')
+        x = 0
+        while self.bnds[x] < idx and x < len(self.exps):
+            x += 1
+        return x - 1
+
+    def get_idx(self, idx):
+        ch_idx = self._get_chunk(idx)
+        acc_idx = self.bnds[ch_idx]
+        return self.exps[ch_idx].get_idx(idx - acc_idx)
+
+    def __getitem__(self, item):
+        return self.get_idx(item)
+
+    def __setitem__(self, key, value):
+        raise ValueError('Not supported')
+
+    def __iter__(self):
+        self.current_idx = 0
+        return self
+
+    def __next__(self):
+        if self.current_idx >= self.size:
+            raise StopIteration
+        else:
+            self.current_idx += 1
+            return self[self.current_idx - 1]
+
+    def __len__(self):
+        return self.size
+
+
+def multiexp(dst=None, data=None, GiHi=False):
+    if GiHi:
+        raise ValueError('Not supported')
+
+    dst = _ensure_dst_key(dst)
+    crypto.identity_into(tmp_pt_1)
+    for i in range(len(data)):
+        sci, pti = data[i]
+        crypto.decodeint_into_noreduce(tmp_sc_1, sci)
+        crypto.decodepoint_into(tmp_pt_2, pti)
+        crypto.scalarmult_into(tmp_pt_3, tmp_pt_2, tmp_sc_1)
+        crypto.point_add_into(tmp_pt_1, tmp_pt_1, tmp_pt_3)
+    crypto.encodepoint_into(tmp_pt_1, dst)
+    return dst
+
+
 class BulletProofBuilder(object):
     def __init__(self):
         self.use_det_masks = True

@@ -176,6 +176,25 @@ class BulletproofTest(aiounittest.AsyncTestCase):
         bp_res = bpi.prove()
         bpi.verify(bp_res)
 
+    def test_multiexp(self):
+        scalars = [0, 1, 2, 3, 4, 99]
+        point_base = [0, 2, 4, 7, 12, 18]
+        scalar_sc = [crypto.sc_init(x) for x in scalars]
+        points = [crypto.scalarmult_base(crypto.sc_init(x)) for x in point_base]
+
+        muex = bp.MultiExp(scalars=[crypto.encodeint(x) for x in scalar_sc],
+                           point_fnc=lambda i, d: crypto.encodepoint(points[i]))
+
+        self.assertEqual(len(muex), len(scalars))
+        res = bp.multiexp(None, muex)
+        res2 = bp.vector_exponent_custom(
+            A=bp.KeyVEval(3, lambda i, d: crypto.encodepoint(crypto.scalarmult_base(crypto.sc_init(point_base[i])))),
+            B=bp.KeyVEval(3, lambda i, d: crypto.encodepoint(crypto.scalarmult_base(crypto.sc_init(point_base[3+i])))),
+            a=bp.KeyVEval(3, lambda i, d: crypto.encodeint(crypto.sc_init(scalars[i]))),
+            b=bp.KeyVEval(3, lambda i, d: crypto.encodeint(crypto.sc_init(scalars[i+3]))),
+        )
+        self.assertEqual(res, res2)
+
 
 if __name__ == "__main__":
     unittest.main()  # pragma: no cover
