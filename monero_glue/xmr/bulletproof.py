@@ -815,7 +815,6 @@ class BulletProofBuilder(object):
         self.v_sR = None
         self.tmp_sc_1 = crypto.new_scalar()
         self.tmp_det_buff = bytearray(64 + 1 + 4)
-        self.tmp_h_buff1 = bytearray(32)
         self.gc_fnc = gc.collect
         self.gc_trace = None
 
@@ -855,7 +854,7 @@ class BulletProofBuilder(object):
         self.tmp_det_buff[0] = int(is_sL)
         memcpy(self.tmp_det_buff, 1, self.proof_sec, 0, len(self.proof_sec))
         dump_uvarint_b_into(i, self.tmp_det_buff, 65)
-        crypto.hash_to_scalar_into(self.tmp_sc_1, self.tmp_h_buff1)
+        crypto.hash_to_scalar_into(self.tmp_sc_1, self.tmp_det_buff)
         crypto.encodeint_into(self.tmp_sc_1, dst)
         return dst
 
