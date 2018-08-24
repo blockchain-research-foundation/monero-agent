@@ -781,7 +781,7 @@ class BulletProofBuilder(object):
         self.v_sL = None
         self.v_sR = None
         self.tmp_sc_1 = crypto.new_scalar()
-        self.tmp_det_buff = bytearray(64 + 1 + 1)
+        self.tmp_det_buff = bytearray(64 + 1 + 4)
         self.tmp_h_buff1 = bytearray(32)
         self.gc_fnc = gc.collect
         self.gc_trace = None
