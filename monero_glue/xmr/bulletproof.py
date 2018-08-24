@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Author: Dusan Klinec, ph4r05, 2018
+#
+# Adapted from Monero C++ code
+# Faster exponentiation uses Pippenger algorithm: https://cr.yp.to/papers/pippenger.pdf
+#
+#
 
 from monero_serialize.core.int_serialize import dump_uvarint_b, dump_uvarint_b_into
 from monero_serialize.xmrtypes import Bulletproof
@@ -363,6 +368,11 @@ def const_vector(val, elems=BP_N):
     return KeyVEval(elems=elems, src=lambda x, d: copy_key(d, val))
 
 
+def consume_vct(vct):
+    for i in range(64):
+        vct[i]
+
+
 def vector_exponent_custom(A, B, a, b, dst=None):
     dst = _ensure_dst_key(dst)
 
@@ -391,6 +401,24 @@ def vector_powers(x, n, dst=None):
     dst[1] = x
     for i in range(2, n):
         sc_mul(dst[i], dst[i - 1], x)
+    return dst
+
+
+def vector_power_sum(x, n, dst=None):
+    dst = _ensure_dst_key(dst)
+    if n == 0:
+        return copy_key(dst, ZERO)
+
+    copy_key(dst, ONE)
+    if n == 1:
+        return dst
+
+    prev = _ensure_dst_key()
+    copy_key(prev, x)
+    for i in range(1, n):
+        if i > 1:
+            sc_mul(prev, prev, x)
+        sc_add(dst, dst, prev)
     return dst
 
 
@@ -447,6 +475,21 @@ def vector_scalar2(a, x, dst=None):
     dst = _ensure_dst_keyvect(dst, len(a))
     for i in range(len(a)):
         scalarmult_key(dst[i], a[i], x)
+    return dst
+
+
+def vector_dup(x, n, dst=None):
+    dst = _ensure_dst_keyvect(dst, n)
+    for i in range(n):
+        dst[i] = x
+    return dst
+
+
+def vector_sum(a, dst=None):
+    dst = _ensure_dst_key(dst)
+    copy_key(dst, ZERO)
+    for i in range(len(a)):
+        sc_add(dst, dst, a[i])
     return dst
 
 
