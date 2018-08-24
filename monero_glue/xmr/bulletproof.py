@@ -735,6 +735,10 @@ class BulletProofBuilder(object):
         if self.gc_fnc:
             self.gc_fnc()
 
+    def assrt(self, cond, msg=None, *args, **kwargs):
+        if not cond:
+            raise ValueError(msg)
+
     def set_input(self, value=None, mask=None):
         self.value = value
         self.value_enc = crypto.encodeint(value)
@@ -1270,4 +1274,212 @@ class BulletProofBuilder(object):
 
         if pprime != tmp:
             raise ValueError("Verification failure step 2")
+        return True
+
+    def verify_batch(self, proofs):
+        """
+        BP batch verification
+        :param proofs:
+        :return:
+        """
+        max_length = 0
+        for proof in proofs:
+            self.assrt(is_reduced(proof.taux), "Input scalar not in range")
+            self.assrt(is_reduced(proof.mu), "Input scalar not in range")
+            self.assrt(is_reduced(proof.a), "Input scalar not in range")
+            self.assrt(is_reduced(proof.b), "Input scalar not in range")
+            self.assrt(is_reduced(proof.t), "Input scalar not in range")
+            self.assrt(len(proof.V) >= 1, "V does not have at least one element")
+            self.assrt(len(proof.L) == len(proof.R), "|L| != |R|")
+            self.assrt(len(proof.L) > 0, "Empty proof")
+            max_length = max(max_length, len(proof.L))
+
+        self.assrt(max_length < 32, "At least one proof is too large")
+
+        maxMN = 1 << max_length
+        logN = 6
+        N = 1 << logN
+        tmp = _ensure_dst_key()
+
+        # setup weighted aggregates
+        Z0 = init_key(ONE)
+        z1 = init_key(ZERO)
+        Z2 = init_key(ONE)
+        z3 = init_key(ZERO)
+        z4 = vector_dup(ZERO, maxMN)
+        z5 = vector_dup(ZERO, maxMN)
+        Y2 = init_key(ONE)
+        Y3 = init_key(ONE)
+        Y4 = init_key(ONE)
+        y0 = init_key(ZERO)
+        y1 = init_key(ZERO)
+
+        for proof in proofs:
+            M = 0
+            logM = 0
+            while True:
+                M = 1 << logM
+                if M > BP_M or M >= len(proof.V):
+                    break
+                logM += 1
+
+            self.assrt(len(proof.L) == 6 + logM, "Proof is not the expected size")
+            MN = M*N
+            weight = crypto.encodeint(crypto.random_scalar())
+
+            # Reconstruct the challenges
+            hash_cache = hash_vct_to_scalar(None, proof.V)
+            y = hash_cache_mash(None, hash_cache, proof.A, proof.S)
+            self.assrt(y != ZERO, "y == 0")
+            z = hash_to_scalar(None, y)
+            copy_key(hash_cache, z)
+            self.assrt(z != ZERO, "z == 0")
+
+            x = hash_cache_mash(None, hash_cache, z, proof.T1, proof.T2)
+            self.assrt(x != ZERO, "x == 0")
+            x_ip = hash_cache_mash(None, hash_cache, x, proof.taux, proof.mu, proof.t)
+            self.assrt(x_ip != ZERO, "x_ip == 0")
+
+            # PAPER LINE 61
+            sc_muladd(y0, proof.taux, weight, y0)
+            zpow = vector_powers(z, M+3)
+
+            k = _ensure_dst_key()
+            ip1y = vector_power_sum(y, MN)
+            sc_mulsub(k, zpow[2], ip1y, ZERO)
+            for j in range(1, M + 1):
+                self.assrt(j + 2 < len(zpow), "invalid zpow index")
+                sc_mulsub(k, zpow[j + 2], BP_IP12, k)
+
+            # VERIFY_line_61rl_new
+            sc_muladd(tmp, z, ip1y, k)
+            sc_sub(tmp, proof.t, tmp)
+            sc_muladd(y1, tmp, weight, y1)
+
+            muex = MultiExp(point_fnc=lambda i, d: proof.V[i])
+            for j in range(len(proof.V)):
+                sc_mul(tmp, zpow[j+2], EIGHT)
+                muex.add_scalar(tmp)
+
+            add_keys(Y2, Y2, scalarmult_key(None, multiexp(None, muex, False), weight))
+            weight8 = _ensure_dst_key()
+            sc_mul(weight8, weight, EIGHT)
+            sc_mul(tmp, x, weight8)
+            add_keys(Y3, Y3, scalarmult_key(None, proof.T1, tmp))
+            xsq = _ensure_dst_key()
+            sc_mul(xsq, x, x)
+            sc_mul(tmp, xsq, weight8)
+            add_keys(Y4, Y4, scalarmult_key(None, proof.T2, tmp))
+            del weight8
+
+            # PAPER LINE 62
+            sc_mul(tmp, x, EIGHT)
+            add_keys(Z0, Z0,
+                     scalarmult_key(None,
+                                    add_keys(None,
+                                             scalarmult8(None, proof.A),
+                                             scalarmult_key(None, proof.S, tmp)),
+                                    weight))
+
+            # Compute the number of rounds for the inner product
+            rounds = logM + logN
+            self.assrt(rounds > 0, "Zero rounds")
+
+            # PAPER LINES 21-22
+            # The inner product challenges are computed per round
+            w = _ensure_dst_keyvect(None, rounds)
+            for i in range(rounds):
+                hash_cache_mash(w[i], hash_cache, proof.L[i], proof.R[i])
+                self.assrt(w[i] != ZERO, "w[i] == 0")
+
+            # Basically PAPER LINES 24-25
+            # Compute the curvepoints from G[i] and H[i]
+            yinvpow = init_key(ONE)
+            ypow = init_key(ONE)
+            yinv = invert(None, y)
+            self.gc(61)
+
+            winv = _ensure_dst_keyvect(None, rounds)
+            for i in range(rounds):
+                invert(winv[i], w[i])
+                self.gc(62)
+
+            g_scalar = _ensure_dst_key()
+            h_scalar = _ensure_dst_key()
+            for i in range(MN):
+                copy_key(g_scalar, proof.a)
+                sc_mul(h_scalar, proof.b, yinvpow)
+
+                for j in range(rounds - 1, -1, -1):
+                    J = len(w) - j - 1
+
+                    if (i & (1 << j)) == 0:
+                        sc_mul(g_scalar, g_scalar, winv[J])
+                        sc_mul(h_scalar, h_scalar, w[J])
+                    else:
+                        sc_mul(g_scalar, g_scalar, w[J])
+                        sc_mul(h_scalar, h_scalar, winv[J])
+
+                # Adjust the scalars using the exponents from PAPER LINE 62
+                sc_add(g_scalar, g_scalar, z)
+                self.assrt(2+i//N < len(zpow), "invalid zpow index")
+                self.assrt(i % N < len(self.twoN), "invalid twoN index")
+                sc_mul(tmp, zpow[2+i//N], self.twoN[i % N])
+                sc_muladd(tmp, z, ypow, tmp)
+                sc_mulsub(h_scalar, tmp, yinvpow, h_scalar)
+
+                sc_muladd(z4[i], g_scalar, weight, z4[i])
+                sc_muladd(z5[i], h_scalar, weight, z5[i])
+
+                if i != MN - 1:
+                    sc_mul(yinvpow, yinvpow, yinv)
+                    sc_mul(ypow, ypow, y)
+                self.gc(62)
+
+            del g_scalar
+            del h_scalar
+            self.gc(63)
+
+            muex = MultiExp(point_fnc=lambda i, d: proof.L[i//2] if i&1 == 0 else proof.R[i//2])
+            for i in range(rounds):
+                sc_mul(tmp, w[i], w[i])
+                sc_mul(tmp, tmp, EIGHT)
+                muex.add_scalar(tmp)
+                sc_mul(tmp, winv[i], winv[i])
+                sc_mul(tmp, tmp, EIGHT)
+                muex.add_scalar(tmp)
+
+            acc = multiexp(None, muex, False)
+            add_keys(Z2, Z2, scalarmult_key(None, acc, weight))
+            sc_mulsub(tmp, proof.a, proof.b, proof.t)
+            sc_mul(tmp, tmp, x_ip)
+            sc_muladd(z3, tmp, weight, z3)
+
+        # now check all proofs at once
+        check1 = _ensure_dst_key()
+        scalarmult_base(check1, y0)
+        add_keys(check1, check1, scalarmult_key(None, XMR_H, y1))
+        sub_keys(check1, check1, Y2)
+        sub_keys(check1, check1, Y3)
+        sub_keys(check1, check1, Y4)
+        if check1 != ONE:
+            raise ValueError('Verification failure at step 1')
+
+        check2 = crypto.new_point()
+        sc_sub(tmp, ZERO, z1)
+        crypto.ge_double_scalarmult_base_vartime(crypto.decodeint(z3), crypto.gen_H(), crypto.decodeint(tmp))
+        crypto.point_add_into(check2, check2, crypto.decodepoint(Z0))
+        crypto.point_add_into(check2, check2, crypto.decodepoint(Z2))
+
+        muex = MultiExp(point_fnc=lambda i, d: self.Gprec[i // 2] if i & 1 == 0 else self.Hprec[i // 2])
+        for i in range(maxMN):
+            sc_sub(tmp, ZERO, z4)
+            muex.add_scalar(tmp)
+            sc_sub(tmp, ZERO, z5)
+            muex.add_scalar(tmp)
+
+        crypto.point_add_into(check2, check2, crypto.decodepoint(multiexp(None, muex, True)))
+        check2_enc = crypto.encodepoint(check2)
+        if check2_enc != ONE:
+            raise ValueError('Verification failure at step 2')
         return True
