@@ -1526,7 +1526,9 @@ class BulletProofBuilder(object):
         crypto.point_add_into(check2, check2, crypto.decodepoint(Z0))
         crypto.point_add_into(check2, check2, crypto.decodepoint(Z2))
 
-        muex = MultiExp(point_fnc=lambda i, d: self.Gprec[i // 2] if i & 1 == 0 else self.Hprec[i // 2])
+        Gprec = self._gprec_aux(maxMN)
+        Hprec = self._hprec_aux(maxMN)
+        muex = MultiExp(point_fnc=lambda i, d: Gprec[i // 2] if i & 1 == 0 else Hprec[i // 2])
         for i in range(maxMN):
             sc_sub(tmp, ZERO, z4[i])
             muex.add_scalar(tmp)
