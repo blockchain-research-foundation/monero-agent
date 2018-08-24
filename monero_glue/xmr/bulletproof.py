@@ -1371,13 +1371,11 @@ class BulletProofBuilder(object):
         y1 = init_key(ZERO)
 
         for proof in proofs:
-            M = 0
+            M = 1
             logM = 0
-            while True:
-                M = 1 << logM
-                if M > BP_M or M >= len(proof.V):
-                    break
+            while M <= BP_M and M < len(proof.V):
                 logM += 1
+                M = 1 << logM
 
             self.assrt(len(proof.L) == 6 + logM, "Proof is not the expected size")
             MN = M*N
