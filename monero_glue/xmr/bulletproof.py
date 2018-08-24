@@ -1440,6 +1440,7 @@ class BulletProofBuilder(object):
             del h_scalar
             self.gc(63)
 
+            sc_muladd(z1, proof.mu, weight, z1)
             muex = MultiExp(point_fnc=lambda i, d: proof.L[i//2] if i&1 == 0 else proof.R[i//2])
             for i in range(rounds):
                 sc_mul(tmp, w[i], w[i])
@@ -1465,17 +1466,16 @@ class BulletProofBuilder(object):
         if check1 != ONE:
             raise ValueError('Verification failure at step 1')
 
-        check2 = crypto.new_point()
         sc_sub(tmp, ZERO, z1)
-        crypto.ge_double_scalarmult_base_vartime(crypto.decodeint(z3), crypto.gen_H(), crypto.decodeint(tmp))
+        check2 = crypto.ge_double_scalarmult_base_vartime(crypto.decodeint(z3), crypto.gen_H(), crypto.decodeint(tmp))
         crypto.point_add_into(check2, check2, crypto.decodepoint(Z0))
         crypto.point_add_into(check2, check2, crypto.decodepoint(Z2))
 
         muex = MultiExp(point_fnc=lambda i, d: self.Gprec[i // 2] if i & 1 == 0 else self.Hprec[i // 2])
         for i in range(maxMN):
-            sc_sub(tmp, ZERO, z4)
+            sc_sub(tmp, ZERO, z4[i])
             muex.add_scalar(tmp)
-            sc_sub(tmp, ZERO, z5)
+            sc_sub(tmp, ZERO, z5[i])
             muex.add_scalar(tmp)
 
         crypto.point_add_into(check2, check2, crypto.decodepoint(multiexp(None, muex, True)))
