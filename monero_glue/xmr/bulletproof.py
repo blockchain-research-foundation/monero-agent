@@ -822,9 +822,7 @@ class BulletProofBuilder(object):
         self.tmp_det_buff[0] = int(is_sL)
         memcpy(self.tmp_det_buff, 1, self.proof_sec, 0, len(self.proof_sec))
         dump_uvarint_b_into(i, self.tmp_det_buff, 65)
-        crypto.keccak_hash_into(self.tmp_h_buff1, self.tmp_det_buff)
-        crypto.keccak_hash_into(self.tmp_h_buff1, self.tmp_h_buff1)
-        crypto.decodeint_into(self.tmp_sc_1, self.tmp_h_buff1)
+        crypto.hash_to_scalar_into(self.tmp_sc_1, self.tmp_h_buff1)
         crypto.encodeint_into(self.tmp_sc_1, dst)
         return dst
 
