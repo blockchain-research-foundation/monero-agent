@@ -228,6 +228,13 @@ class BulletproofTest(aiounittest.AsyncTestCase):
         )
         self.assertEqual(res, res2)
 
+    def test_prove_batch(self):
+        self.skip_if_cannot_test()
+        bpi = bp.BulletProofBuilder()
+        sv = [crypto.sc_init(123), crypto.sc_init(768)]
+        gamma = [crypto.sc_init(456), crypto.sc_init(901)]
+        proof = bpi.prove_batch(sv, gamma)
+        bpi.verify_batch([proof])
 
 if __name__ == "__main__":
     unittest.main()  # pragma: no cover

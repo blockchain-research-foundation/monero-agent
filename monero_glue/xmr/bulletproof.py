@@ -1171,6 +1171,320 @@ class BulletProofBuilder(object):
             t=t,
         )
 
+    def prove_batch(self, sv, gamma):
+        self.assrt(len(sv) == len(gamma), "|sv| != |gamma|")
+        self.assrt(len(sv) > 0, "sv empty")
+
+        self.use_det_masks = False
+        self.proof_sec = crypto.random_bytes(64)
+        sv = [crypto.encodeint(x) for x in sv]
+        gamma = [crypto.encodeint(x) for x in gamma]
+
+        logN = 6
+        N = 1 << logN
+        M, logM = 1, 0
+        while M <= BP_M and M < len(sv):
+            logM += 1
+            M = 1 << logM
+        MN = M * N
+
+        V = _ensure_dst_keyvect(None, len(sv))
+        aL = _ensure_dst_keyvect(None, MN)
+        aR = _ensure_dst_keyvect(None, MN)
+
+        for i in range(len(sv)):
+            add_keys2(V[i], gamma[i], sv[i], XMR_H)
+            scalarmult_key(V[i], V[i], INV_EIGHT)
+
+        for j in range(M):
+            for i in range(N - 1, -1, -1):
+                if j > len(sv):
+                    aL[j * N + i] = ZERO
+                elif sv[j][i//8] & (1 << i % 8):
+                    aL[j * N + i] = ONE
+                else:
+                    aL[j * N + i] = ZERO
+                sc_sub(aR[j * N + i], aL[j * N + i], ONE)
+
+        hash_cache = hash_vct_to_scalar(None, V)
+        while True:
+            self.gc(10)
+            r = self._prove_batch_main(V, gamma, aL, aR, hash_cache, logM, logN, M, N)
+            if r[0]:
+                break
+        return r[1]
+
+    def _gprec_aux(self, size):
+        return KeyVPrecomp(size, self.Gprec, lambda i, d: get_exponent(None, XMR_H, i * 2 + 1))
+
+    def _hprec_aux(self, size):
+        return KeyVPrecomp(size, self.Hprec, lambda i, d: get_exponent(None, XMR_H, i * 2))
+
+    def _two_aux(self, size):
+        # Simple recursive exponentiation from precomputed results
+        lx = len(self.twoN)
+
+        def pow_two(i, d=None):
+            if i < lx:
+                return self.twoN[i]
+            lw = pow_two(math.floor(i/2.))
+            rw = pow_two(math.ceil(i/2.))
+            return sc_mul(None, lw, rw)
+
+        return KeyVPrecomp(size, self.twoN, pow_two)
+
+    def _prove_batch_main(self, V, gamma, aL, aR, hash_cache, logM, logN, M, N):
+        logMN = logM + logN
+        MN = M * N
+
+        # Extended precomputed GiHi
+        Gprec = self._gprec_aux(MN)
+        Hprec = self._hprec_aux(MN)
+
+        # PAPER LINES 38-39
+        alpha = sc_gen()
+        ve = _ensure_dst_key()
+        A = _ensure_dst_key()
+        vector_exponent_custom(Gprec, Hprec, aL, aR, ve)
+        add_keys(A, ve, scalarmult_base(tmp_bf_1, alpha))
+        scalarmult_key(A, A, INV_EIGHT)
+        self.gc(11)
+
+        # PAPER LINES 40-42
+        sL = self.sL_vct(MN)
+        sR = self.sL_vct(MN)
+        rho = sc_gen()
+        vector_exponent_custom(Gprec, Hprec, sL, sR, ve)
+        S = _ensure_dst_key()
+        add_keys(S, ve, scalarmult_base(tmp_bf_1, rho))
+        scalarmult_key(S, S, INV_EIGHT)
+        self.gc(12)
+
+        # PAPER LINES 43-45
+        y = _ensure_dst_key()
+        hash_cache_mash(y, hash_cache, A, S)
+        if y == ZERO:
+            return 0,
+
+        z = _ensure_dst_key()
+        hash_to_scalar(hash_cache, y)
+        copy_key(z, hash_cache)
+        if z == ZERO:
+            return 0,
+
+        # Polynomial construction by coefficients
+        self.gc(13)
+        zMN = const_vector(z, MN)
+        l0 = vector_subtract(aL, zMN, None)
+        l1 = sL
+
+        # This computes the ugly sum/concatenation from PAPER LINE 65
+        zero_twos = _ensure_dst_keyvect(None, MN)
+        zpow = vector_powers(z, M + 2)
+        twoN = self._two_aux(MN)
+        self.gc(14)
+
+        for i in range(MN):
+            zero_twos[i] = ZERO
+            for j in range(1, M + 1):
+                if i >= (j-1)*N and i < j*N:
+                    sc_muladd(zero_twos[i], zpow[1+j], twoN[i-(j-1)*N], zero_twos[i])
+
+        self.gc(15)
+
+        r0 = vector_add(aR, zMN)
+        yMN = vector_powers(y, MN)
+        hadamard(r0, yMN, dst=r0)
+        vector_add(r0, zero_twos, dst=r0)
+        r1 = hadamard(yMN, sR)
+        self.gc(16)
+
+        # Polynomial construction before PAPER LINE 46
+        t1_1 = inner_product(l0, r1)
+        t1_2 = inner_product(l1, r0)
+        t1 = sc_add(None, t1_1, t1_2)
+        t2 = inner_product(l1, r1)
+
+        # PAPER LINES 47-48
+        tau1, tau2 = sc_gen(), sc_gen()
+        T1, T2 = _ensure_dst_key(), _ensure_dst_key()
+
+        add_keys(T1, scalarmult_key(tmp_bf_1, XMR_H, t1), scalarmult_base(tmp_bf_2, tau1))
+        scalarmult_key(T1, T1, INV_EIGHT)
+        add_keys(T2, scalarmult_key(tmp_bf_1, XMR_H, t2), scalarmult_base(tmp_bf_2, tau2))
+        scalarmult_key(T2, T2, INV_EIGHT)
+        self.gc(17)
+
+        # PAPER LINES 49-51
+        x = _ensure_dst_key()
+        hash_cache_mash(x, hash_cache, z, T1, T2)
+        if x == ZERO:
+            return 0,
+
+        # PAPER LINES 52-53
+        taux = _ensure_dst_key()
+        copy_key(taux, ZERO)
+        sc_mul(taux, tau1, x)
+        xsq = _ensure_dst_key()
+        sc_mul(xsq, x, x)
+        sc_muladd(taux, tau2, xsq, taux)
+        for j in range(1, len(V) + 1):
+            sc_muladd(taux, zpow[j+1], gamma[j-1], taux)
+
+        self.gc(18)
+        mu = _ensure_dst_key()
+        sc_muladd(mu, x, rho, alpha)
+
+        # PAPER LINES 54-57
+        l = vector_add(l0, vector_scalar(l1, x))
+        r = vector_add(r0, vector_scalar(r1, x))
+        t = inner_product(l, r)
+        self.gc(19)
+
+        # PAPER LINES 32-33
+        x_ip = hash_cache_mash(None, hash_cache, x, taux, mu, t)
+        if x_ip == ZERO:
+            return 0, None
+
+        # PHASE 2
+        # These are used in the inner product rounds
+        nprime = MN
+        Gprime = _ensure_dst_keyvect(None, MN)
+        Hprime = _ensure_dst_keyvect(None, MN)
+        aprime = l
+        bprime = r
+        yinv = invert(None, y)
+        yinvpow = init_key(ONE)
+        self.gc(20)
+
+        for i in range(0, MN):
+            Gprime[i] = Gprec[i]
+            scalarmult_key(Hprime[i], Hprec[i], yinvpow)
+            sc_mul(yinvpow, yinvpow, yinv)
+
+        L = _ensure_dst_keyvect(None, logMN)
+        R = _ensure_dst_keyvect(None, logMN)
+        w = _ensure_dst_keyvect(None, logMN)  # this is the challenge x in the inner product protocol
+        cL = _ensure_dst_key()
+        cR = _ensure_dst_key()
+        tmp = _ensure_dst_key()
+
+        round = 0
+        _tmp_k_1 = _ensure_dst_key()
+        _tmp_vct_1 = _ensure_dst_keyvect(None, nprime // 2)
+        _tmp_vct_2 = _ensure_dst_keyvect(None, nprime // 2)
+        _tmp_vct_3 = _ensure_dst_keyvect(None, nprime // 2)
+        _tmp_vct_4 = _ensure_dst_keyvect(None, nprime // 2)
+        self.gc(21)
+
+        # PAPER LINE 13
+        while nprime > 1:
+            # PAPER LINE 15
+            nprime >>= 1
+
+            _tmp_vct_1.resize(nprime, chop=True)
+            _tmp_vct_2.resize(nprime, chop=True)
+            _tmp_vct_3.resize(nprime, chop=True)
+            _tmp_vct_4.resize(nprime, chop=True)
+            self.gc(22)
+
+            # PAPER LINES 16-17
+            inner_product(
+                aprime.slice(_tmp_vct_1, 0, nprime),
+                bprime.slice(_tmp_vct_2, nprime, bprime.size),
+                cL,
+            )
+
+            inner_product(
+                aprime.slice(_tmp_vct_1, nprime, aprime.size),
+                bprime.slice(_tmp_vct_2, 0, nprime),
+                cR,
+            )
+
+            self.gc(23)
+
+            # PAPER LINES 18-19
+            vector_exponent_custom(
+                Gprime.slice(_tmp_vct_1, nprime, len(Gprime)),
+                Hprime.slice(_tmp_vct_2, 0, nprime),
+                aprime.slice(_tmp_vct_3, 0, nprime),
+                bprime.slice(_tmp_vct_4, nprime, len(bprime)),
+                L[round],
+            )
+
+            sc_mul(tmp, cL, x_ip)
+            add_keys(L[round], L[round], scalarmultH(_tmp_k_1, tmp))
+            scalarmult_key(L[round], L[round], INV_EIGHT)
+            self.gc(24)
+
+            vector_exponent_custom(
+                Gprime.slice(_tmp_vct_1, 0, nprime),
+                Hprime.slice(_tmp_vct_2, nprime, len(Hprime)),
+                aprime.slice(_tmp_vct_3, nprime, len(aprime)),
+                bprime.slice(_tmp_vct_4, 0, nprime),
+                R[round],
+            )
+
+            sc_mul(tmp, cR, x_ip)
+            add_keys(R[round], R[round], scalarmultH(_tmp_k_1, tmp))
+            scalarmult_key(R[round], R[round], INV_EIGHT)
+            self.gc(25)
+
+            # PAPER LINES 21-22
+            hash_cache_mash(w[round], hash_cache, L[round], R[round])
+            if w[round] == ZERO:
+                return 0,
+
+            # PAPER LINES 24-25
+            winv = invert(None, w[round])
+            self.gc(26)
+
+            vector_scalar2(Gprime.slice(_tmp_vct_1, 0, nprime), winv, _tmp_vct_3)
+            vector_scalar2(
+                Gprime.slice(_tmp_vct_2, nprime, len(Gprime)), w[round], _tmp_vct_4
+            )
+            hadamard2(_tmp_vct_3, _tmp_vct_4, Gprime)
+            self.gc(27)
+
+            vector_scalar2(Hprime.slice(_tmp_vct_1, 0, nprime), w[round], _tmp_vct_3)
+            vector_scalar2(
+                Hprime.slice(_tmp_vct_2, nprime, len(Hprime)), winv, _tmp_vct_4
+            )
+            hadamard2(_tmp_vct_3, _tmp_vct_4, Hprime)
+            self.gc(28)
+
+            # PAPER LINES 28-29
+            vector_scalar(aprime.slice(_tmp_vct_1, 0, nprime), w[round], _tmp_vct_3)
+            vector_scalar(
+                aprime.slice(_tmp_vct_2, nprime, len(aprime)), winv, _tmp_vct_4
+            )
+            vector_add(_tmp_vct_3, _tmp_vct_4, aprime)
+            self.gc(29)
+
+            vector_scalar(bprime.slice(_tmp_vct_1, 0, nprime), winv, _tmp_vct_3)
+            vector_scalar(
+                bprime.slice(_tmp_vct_2, nprime, len(bprime)), w[round], _tmp_vct_4
+            )
+            vector_add(_tmp_vct_3, _tmp_vct_4, bprime)
+
+            round += 1
+            self.gc(30)
+
+        return 1, Bulletproof(
+            V=V,
+            A=A,
+            S=S,
+            T1=T1,
+            T2=T2,
+            taux=taux,
+            mu=mu,
+            L=L,
+            R=R,
+            a=aprime[0],
+            b=bprime[0],
+            t=t,
+        )
+
     def verify(self, proof):
         if len(proof.V) != 1:
             raise ValueError("len(V) != 1")
