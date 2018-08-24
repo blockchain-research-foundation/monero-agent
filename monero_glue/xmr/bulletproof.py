@@ -1200,16 +1200,10 @@ class BulletProofBuilder(object):
 
         # Basically PAPER LINES 24-25
         # Compute the curvepoints from G[i] and H[i]
-        inner_prod = _ensure_dst_key()
-        yinvpow = _ensure_dst_key()
-        ypow = _ensure_dst_key()
-        yinv = _ensure_dst_key()
-
-        copy_key(inner_prod, ONE)
-        copy_key(yinvpow, ONE)
-        copy_key(ypow, ONE)
-
-        invert(yinv, y)
+        inner_prod = init_key(ONE)
+        yinvpow = init_key(ONE)
+        ypow = init_key(ONE)
+        yinv = invert(None, y)
         self.gc(61)
 
         winv = _ensure_dst_keyvect(None, rounds)
