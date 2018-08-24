@@ -603,7 +603,7 @@ class MultiExp(object):
         self.size = len(self.points)
 
     def add_scalar(self, scalar):
-        self.scalars.append(scalar)
+        self.scalars.append(init_key(scalar))
         self.size = len(self.scalars)
 
     def get_idx(self, idx):
