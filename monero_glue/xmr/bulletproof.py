@@ -83,6 +83,12 @@ def copy_key(dst, src):
     return dst
 
 
+def copy_key_ifex(dst, src):
+    if dst is None:
+        return src
+    return copy_key(dst, src)
+
+
 def copy_vector(dst, src):
     for i in range(len(src)):
         copy_key(dst[i], src[i])
