@@ -1057,23 +1057,22 @@ class BulletProofBuilder(object):
         # PAPER LINE 13
         while nprime > 1:
             # PAPER LINE 15
+            npr2 = nprime
             nprime >>= 1
             _tmp_vct_1.resize(nprime, chop=True)
             _tmp_vct_2.resize(nprime, chop=True)
-            _tmp_vct_3.resize(nprime, chop=True)
-            _tmp_vct_4.resize(nprime, chop=True)
             self.gc(22)
 
             # PAPER LINES 16-17
             inner_product(
-                aprime.slice(_tmp_vct_1, 0, nprime),
-                bprime.slice(_tmp_vct_2, nprime, bprime.size),
+                aprime.slice_view(0, nprime),
+                bprime.slice_view(nprime, npr2),
                 cL,
             )
 
             inner_product(
-                aprime.slice(_tmp_vct_1, nprime, aprime.size),
-                bprime.slice(_tmp_vct_2, 0, nprime),
+                aprime.slice_view(nprime, npr2),
+                bprime.slice_view(0, nprime),
                 cR,
             )
 
@@ -1081,27 +1080,27 @@ class BulletProofBuilder(object):
 
             # PAPER LINES 18-19
             vector_exponent_custom(
-                Gprime.slice(_tmp_vct_1, nprime, len(Gprime)),
-                Hprime.slice(_tmp_vct_2, 0, nprime),
-                aprime.slice(_tmp_vct_3, 0, nprime),
-                bprime.slice(_tmp_vct_4, nprime, len(bprime)),
+                Gprime.slice_view(nprime, npr2),
+                Hprime.slice_view(0, nprime),
+                aprime.slice_view(0, nprime),
+                bprime.slice_view(nprime, npr2),
                 L[round],
             )
 
             sc_mul(tmp, cL, x_ip)
-            add_keys(L[round], L[round], scalarmult_key(_tmp_k_1, XMR_H, tmp))
+            add_keys(L[round], L[round], scalarmultH(_tmp_k_1, tmp))
             self.gc(24)
 
             vector_exponent_custom(
-                Gprime.slice(_tmp_vct_1, 0, nprime),
-                Hprime.slice(_tmp_vct_2, nprime, len(Hprime)),
-                aprime.slice(_tmp_vct_3, nprime, len(aprime)),
-                bprime.slice(_tmp_vct_4, 0, nprime),
+                Gprime.slice_view(0, nprime),
+                Hprime.slice_view(nprime, npr2),
+                aprime.slice_view(nprime, npr2),
+                bprime.slice_view(0, nprime),
                 R[round],
             )
 
             sc_mul(tmp, cR, x_ip)
-            add_keys(R[round], R[round], scalarmult_key(_tmp_k_1, XMR_H, tmp))
+            add_keys(R[round], R[round], scalarmultH(_tmp_k_1, tmp))
             self.gc(25)
 
             # PAPER LINES 21-22
@@ -1111,33 +1110,25 @@ class BulletProofBuilder(object):
             invert(winv, w[round])
             self.gc(26)
 
-            vector_scalar2(Gprime.slice(_tmp_vct_1, 0, nprime), winv, _tmp_vct_3)
-            vector_scalar2(
-                Gprime.slice(_tmp_vct_2, nprime, len(Gprime)), w[round], _tmp_vct_4
-            )
-            hadamard2(_tmp_vct_3, _tmp_vct_4, Gprime)
+            vector_scalar2(Gprime.slice_view(0, nprime), winv, _tmp_vct_1)
+            vector_scalar2(Gprime.slice_view(nprime, npr2), w[round], _tmp_vct_2)
+            hadamard2(_tmp_vct_1, _tmp_vct_2, Gprime)
             self.gc(27)
 
-            vector_scalar2(Hprime.slice(_tmp_vct_1, 0, nprime), w[round], _tmp_vct_3)
-            vector_scalar2(
-                Hprime.slice(_tmp_vct_2, nprime, len(Hprime)), winv, _tmp_vct_4
-            )
-            hadamard2(_tmp_vct_3, _tmp_vct_4, Hprime)
+            vector_scalar2(Hprime.slice_view(0, nprime), w[round], _tmp_vct_1)
+            vector_scalar2(Hprime.slice_view(nprime, npr2), winv, _tmp_vct_2)
+            hadamard2(_tmp_vct_1, _tmp_vct_2, Hprime)
             self.gc(28)
 
             # PAPER LINES 28-29
-            vector_scalar(aprime.slice(_tmp_vct_1, 0, nprime), w[round], _tmp_vct_3)
-            vector_scalar(
-                aprime.slice(_tmp_vct_2, nprime, len(aprime)), winv, _tmp_vct_4
-            )
-            vector_add(_tmp_vct_3, _tmp_vct_4, aprime)
+            vector_scalar(aprime.slice_view(0, nprime), w[round], _tmp_vct_1)
+            vector_scalar(aprime.slice_view(nprime, npr2), winv, _tmp_vct_2)
+            vector_add(_tmp_vct_1, _tmp_vct_2, aprime)
             self.gc(29)
 
-            vector_scalar(bprime.slice(_tmp_vct_1, 0, nprime), winv, _tmp_vct_3)
-            vector_scalar(
-                bprime.slice(_tmp_vct_2, nprime, len(bprime)), w[round], _tmp_vct_4
-            )
-            vector_add(_tmp_vct_3, _tmp_vct_4, bprime)
+            vector_scalar(bprime.slice_view(0, nprime), winv, _tmp_vct_1)
+            vector_scalar(bprime.slice_view(nprime, npr2), w[round], _tmp_vct_2)
+            vector_add(_tmp_vct_1, _tmp_vct_2, bprime)
 
             round += 1
             self.gc(30)
@@ -1417,34 +1408,33 @@ class BulletProofBuilder(object):
         # PAPER LINE 13
         while nprime > 1:
             # PAPER LINE 15
+            npr2 = nprime
             nprime >>= 1
 
             _tmp_vct_1.resize(nprime, chop=True)
             _tmp_vct_2.resize(nprime, chop=True)
-            _tmp_vct_3.resize(nprime, chop=True)
-            _tmp_vct_4.resize(nprime, chop=True)
             self.gc(22)
 
             # PAPER LINES 16-17
             inner_product(
-                aprime.slice(_tmp_vct_1, 0, nprime),
-                bprime.slice(_tmp_vct_2, nprime, bprime.size),
+                aprime.slice_view(0, nprime),
+                bprime.slice_view(nprime, npr2),
                 cL,
             )
 
             inner_product(
-                aprime.slice(_tmp_vct_1, nprime, aprime.size),
-                bprime.slice(_tmp_vct_2, 0, nprime),
+                aprime.slice_view(nprime, npr2),
+                bprime.slice_view(0, nprime),
                 cR,
             )
             self.gc(23)
 
             # PAPER LINES 18-19
             vector_exponent_custom(
-                Gprime.slice(_tmp_vct_1, nprime, len(Gprime)),
-                Hprime.slice(_tmp_vct_2, 0, nprime),
-                aprime.slice(_tmp_vct_3, 0, nprime),
-                bprime.slice(_tmp_vct_4, nprime, len(bprime)),
+                Gprime.slice_view(nprime, npr2),
+                Hprime.slice_view(0, nprime),
+                aprime.slice_view(0, nprime),
+                bprime.slice_view(nprime, npr2),
                 L[round],
             )
 
@@ -1454,10 +1444,10 @@ class BulletProofBuilder(object):
             self.gc(24)
 
             vector_exponent_custom(
-                Gprime.slice(_tmp_vct_1, 0, nprime),
-                Hprime.slice(_tmp_vct_2, nprime, len(Hprime)),
-                aprime.slice(_tmp_vct_3, nprime, len(aprime)),
-                bprime.slice(_tmp_vct_4, 0, nprime),
+                Gprime.slice_view(0, nprime),
+                Hprime.slice_view(nprime, npr2),
+                aprime.slice_view(nprime, npr2),
+                bprime.slice_view(0, nprime),
                 R[round],
             )
 
@@ -1475,36 +1465,28 @@ class BulletProofBuilder(object):
             invert(winv, w[round])
             self.gc(26)
 
-            vector_scalar2(Gprime.slice(_tmp_vct_1, 0, nprime), winv, _tmp_vct_3)
-            vector_scalar2(
-                Gprime.slice(_tmp_vct_2, nprime, len(Gprime)), w[round], _tmp_vct_4
-            )
-            hadamard2(_tmp_vct_3, _tmp_vct_4, Gprime)
+            vector_scalar2(Gprime.slice_view(0, nprime), winv, _tmp_vct_1)
+            vector_scalar2(Gprime.slice_view(nprime, npr2), w[round], _tmp_vct_2)
+            hadamard2(_tmp_vct_1, _tmp_vct_2, Gprime)
             Gprime.resize(nprime, chop=True)
             self.gc(27)
 
-            vector_scalar2(Hprime.slice(_tmp_vct_1, 0, nprime), w[round], _tmp_vct_3)
-            vector_scalar2(
-                Hprime.slice(_tmp_vct_2, nprime, len(Hprime)), winv, _tmp_vct_4
-            )
-            hadamard2(_tmp_vct_3, _tmp_vct_4, Hprime)
+            vector_scalar2(Hprime.slice_view(0, nprime), w[round], _tmp_vct_1)
+            vector_scalar2(Hprime.slice_view(nprime, npr2), winv, _tmp_vct_2)
+            hadamard2(_tmp_vct_1, _tmp_vct_2, Hprime)
             Hprime.resize(nprime, chop=True)
             self.gc(28)
 
             # PAPER LINES 28-29
-            vector_scalar(aprime.slice(_tmp_vct_1, 0, nprime), w[round], _tmp_vct_3)
-            vector_scalar(
-                aprime.slice(_tmp_vct_2, nprime, len(aprime)), winv, _tmp_vct_4
-            )
-            vector_add(_tmp_vct_3, _tmp_vct_4, aprime)
+            vector_scalar(aprime.slice_view(0, nprime), w[round], _tmp_vct_1)
+            vector_scalar(aprime.slice_view(nprime, npr2), winv, _tmp_vct_2)
+            vector_add(_tmp_vct_1, _tmp_vct_2, aprime)
             aprime.resize(nprime, chop=True)
             self.gc(29)
 
-            vector_scalar(bprime.slice(_tmp_vct_1, 0, nprime), winv, _tmp_vct_3)
-            vector_scalar(
-                bprime.slice(_tmp_vct_2, nprime, len(bprime)), w[round], _tmp_vct_4
-            )
-            vector_add(_tmp_vct_3, _tmp_vct_4, bprime)
+            vector_scalar(bprime.slice_view(0, nprime), winv, _tmp_vct_1)
+            vector_scalar(bprime.slice_view(nprime, npr2), w[round], _tmp_vct_2)
+            vector_add(_tmp_vct_1, _tmp_vct_2, bprime)
             bprime.resize(nprime, chop=True)
 
             round += 1
