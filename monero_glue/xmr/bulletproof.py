@@ -461,7 +461,7 @@ def _ensure_dst_keyvect(dst=None, size=None):
 
 
 def const_vector(val, elems=BP_N):
-    return KeyVEval(elems=elems, src=lambda x, d: copy_key(d, val))
+    return KeyVEval(elems=elems, src=lambda x, d: val)
 
 
 def consume_vct(vct):
@@ -649,6 +649,15 @@ def init_constants():
 
 
 class MultiExp(object):
+    """
+    MultiExp object similar to MultiExp array of [(scalar, point), ]
+    MultiExp computes simply: res = \sum_i scalar_i * point_i
+    Straus / Pippenger algorithms are implemented in the original Monero C++ code for the speed
+    but the memory cost is around 1 MB which is not affordable here in HW devices.
+
+    Moreover, Monero needs speed for very fast verification for blockchain verification which is not
+    priority in this use case.
+    """
     def __init__(self, size=None, scalars=None, points=None, scalar_fnc=None, point_fnc=None):
         self.size = size if size else None
         self.current_idx = 0
@@ -687,9 +696,6 @@ class MultiExp(object):
 
     def __getitem__(self, item):
         return self.get_idx(item)
-
-    def __setitem__(self, key, value):
-        raise ValueError('Not supported')
 
     def __iter__(self):
         self.current_idx = 0
