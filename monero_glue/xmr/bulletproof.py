@@ -816,7 +816,7 @@ class BulletProofBuilder(object):
 
         self.tmp_sc_1 = crypto.new_scalar()
         self.tmp_det_buff = bytearray(64 + 1 + 4)
-        
+
         self.gc_fnc = gc.collect
         self.gc_trace = None
 
@@ -852,6 +852,25 @@ class BulletProofBuilder(object):
         crypto.hash_to_scalar_into(self.tmp_sc_1, self.tmp_det_buff)
         crypto.encodeint_into(self.tmp_sc_1, dst)
         return dst
+
+    def _gprec_aux(self, size):
+        return KeyVPrecomp(size, self.Gprec, lambda i, d: get_exponent(None, XMR_H, i * 2 + 1))
+
+    def _hprec_aux(self, size):
+        return KeyVPrecomp(size, self.Hprec, lambda i, d: get_exponent(None, XMR_H, i * 2))
+
+    def _two_aux(self, size):
+        # Simple recursive exponentiation from precomputed results
+        lx = len(self.twoN)
+
+        def pow_two(i, d=None):
+            if i < lx:
+                return self.twoN[i]
+            lw = pow_two(math.floor(i / 2.))
+            rw = pow_two(math.ceil(i / 2.))
+            return sc_mul(None, lw, rw)
+
+        return KeyVPrecomp(size, self.twoN, pow_two)
 
     def sL(self, i, dst=None):
         return self._det_mask(i, True, dst)
@@ -949,7 +968,7 @@ class BulletProofBuilder(object):
 
         sc_add(t1, t1, ip1)
 
-        vp2zsq = vector_scalar(self.twoN, zsq)
+        vp2zsq = vector_scalar(self._two_aux(BP_N), zsq)
 
         # Originally:
         # ip2 = inner_product(self.v_sL, vector_add(hadamard(yN, aR_vpIz), vp2zsq))
@@ -1231,25 +1250,6 @@ class BulletProofBuilder(object):
                 break
         return r[1]
 
-    def _gprec_aux(self, size):
-        return KeyVPrecomp(size, self.Gprec, lambda i, d: get_exponent(None, XMR_H, i * 2 + 1))
-
-    def _hprec_aux(self, size):
-        return KeyVPrecomp(size, self.Hprec, lambda i, d: get_exponent(None, XMR_H, i * 2))
-
-    def _two_aux(self, size):
-        # Simple recursive exponentiation from precomputed results
-        lx = len(self.twoN)
-
-        def pow_two(i, d=None):
-            if i < lx:
-                return self.twoN[i]
-            lw = pow_two(math.floor(i/2.))
-            rw = pow_two(math.ceil(i/2.))
-            return sc_mul(None, lw, rw)
-
-        return KeyVPrecomp(size, self.twoN, pow_two)
-
     def _prove_batch_main(self, V, gamma, aL, aR, hash_cache, logM, logN, M, N):
         logMN = logM + logN
         MN = M * N
@@ -1311,7 +1311,7 @@ class BulletProofBuilder(object):
         self.gc(15)
 
         r0 = vector_add(aR, zMN)
-        del(zMN)
+        del(zMN, twoN)
 
         yMN = vector_powers(y, MN)
         hadamard(r0, yMN, dst=r0)
@@ -1607,6 +1607,7 @@ class BulletProofBuilder(object):
 
         g_scalar = _ensure_dst_key()
         h_scalar = _ensure_dst_key()
+        twoN = self._two_aux(BP_N)
         for i in range(BP_N):
             copy_key(g_scalar, proof.a)
             sc_mul(h_scalar, proof.b, yinvpow)
@@ -1623,7 +1624,7 @@ class BulletProofBuilder(object):
 
             # Adjust the scalars using the exponents from PAPER LINE 62
             sc_add(g_scalar, g_scalar, z)
-            sc_mul(tmp, zsq, self.twoN[i])
+            sc_mul(tmp, zsq, twoN[i])
             sc_muladd(tmp, z, ypow, tmp)
             sc_mulsub(h_scalar, tmp, yinvpow, h_scalar)
 
@@ -1637,7 +1638,7 @@ class BulletProofBuilder(object):
                 sc_mul(ypow, ypow, y)
             self.gc(62)
 
-        del(g_scalar, h_scalar)
+        del(g_scalar, h_scalar, twoN)
         self.gc(63)
 
         # PAPER LINE 26
@@ -1796,6 +1797,7 @@ class BulletProofBuilder(object):
 
             g_scalar = _ensure_dst_key()
             h_scalar = _ensure_dst_key()
+            twoN = self._two_aux(MN)
             for i in range(MN):
                 copy_key(g_scalar, proof.a)
                 sc_mul(h_scalar, proof.b, yinvpow)
@@ -1813,8 +1815,8 @@ class BulletProofBuilder(object):
                 # Adjust the scalars using the exponents from PAPER LINE 62
                 sc_add(g_scalar, g_scalar, z)
                 self.assrt(2+i//N < len(zpow), "invalid zpow index")
-                self.assrt(i % N < len(self.twoN), "invalid twoN index")
-                sc_mul(tmp, zpow[2+i//N], self.twoN[i % N])
+                self.assrt(i % N < len(twoN), "invalid twoN index")
+                sc_mul(tmp, zpow[2+i//N], twoN[i % N])
                 sc_muladd(tmp, z, ypow, tmp)
                 sc_mulsub(h_scalar, tmp, yinvpow, h_scalar)
 
@@ -1826,8 +1828,7 @@ class BulletProofBuilder(object):
                     sc_mul(ypow, ypow, y)
                 self.gc(62)
 
-            del g_scalar
-            del h_scalar
+            del(g_scalar, h_scalar, twoN)
             self.gc(63)
 
             sc_muladd(z1, proof.mu, weight, z1)
