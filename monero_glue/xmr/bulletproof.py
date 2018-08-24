@@ -291,13 +291,15 @@ class KeyV(object):
     Constant precomputed buffers = bytes, frozen. Same operation as normal.
     """
 
-    def __init__(self, elems=64, src=None, buffer=None, const=False):
+    def __init__(self, elems=64, src=None, buffer=None, const=False, no_init=False):
         self.current_idx = 0
         self.d = None
         self.mv = None
         self.size = elems
         self.const = const
-        if src:
+        if no_init:
+            pass
+        elif src:
             self.d = bytearray(src.d)
             self.size = src.size
         elif buffer:
@@ -305,7 +307,8 @@ class KeyV(object):
             self.size = len(buffer) // 32
         else:
             self.d = bytearray(32 * elems)
-        self._set_mv()
+        if not no_init:
+            self._set_mv()
 
     def _set_mv(self):
         self.mv = memoryview(self.d)
@@ -383,7 +386,7 @@ class KeyVEval(KeyV):
     """
 
     def __init__(self, elems=64, src=None):
-        super().__init__(elems)
+        super().__init__(elems, no_init=True)
         self.size = elems
         self.fnc = src
         self.buff = _ensure_dst_key()
@@ -414,7 +417,7 @@ class KeyVSized(KeyV):
     (e.g., precomputed, but has to have exact size for further computations)
     """
     def __init__(self, wrapped, new_size):
-        super().__init__(wrapped)
+        super().__init__(wrapped, no_init=True)
         self.size = new_size
         self.wrapped = wrapped
 
@@ -435,7 +438,7 @@ class KeyVPrecomp(KeyV):
     but possible to compute further
     """
     def __init__(self, size, precomp_prefix, aux_comp_fnc):
-        super().__init__(size)
+        super().__init__(size, no_init=True)
         self.size = size
         self.precomp_prefix = precomp_prefix
         self.aux_comp_fnc = aux_comp_fnc
