@@ -627,10 +627,10 @@ def hash_cache_mash(dst, hash_cache, *args):
     return dst
 
 
-def init_exponents():
-    Gi = KeyV()
-    Hi = KeyV()
-    for i in range(64):
+def init_exponents(ln=64):
+    Gi = KeyV(ln)
+    Hi = KeyV(ln)
+    for i in range(ln):
         get_exponent(Hi[i], XMR_H, i * 2)
         get_exponent(Gi[i], XMR_H, i * 2 + 1)
     return Gi, Hi
@@ -656,13 +656,13 @@ def is_reduced(sc):
     return crypto.encodeint(crypto.decodeint(sc)) == sc
 
 
-def init_constants():
-    Gi, Hi = init_exponents()
+def init_constants(ln=64):
+    Gi, Hi = init_exponents(ln)
     GiB = vect2buff(Gi)
     HiB = vect2buff(Hi)
-    oneN = vector_powers(ONE, 64)
+    oneN = vector_powers(ONE, ln)
     oneNB = vect2buff(oneN)
-    twoN = vector_powers(TWO, 64)
+    twoN = vector_powers(TWO, ln)
     twoNB = vect2buff(twoN)
     ip12 = inner_product(oneN, twoN)
     ip12B = key2buff(ip12)
