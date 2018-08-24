@@ -1169,7 +1169,6 @@ class BulletProofBuilder(object):
         self.assrt(len(sv) == len(gamma), "|sv| != |gamma|")
         self.assrt(len(sv) > 0, "sv empty")
 
-        self.use_det_masks = False
         self.proof_sec = crypto.random_bytes(64)
         sv = [crypto.encodeint(x) for x in sv]
         gamma = [crypto.encodeint(x) for x in gamma]
@@ -1183,22 +1182,23 @@ class BulletProofBuilder(object):
         MN = M * N
 
         V = _ensure_dst_keyvect(None, len(sv))
-        aL = _ensure_dst_keyvect(None, MN)
-        aR = _ensure_dst_keyvect(None, MN)
-
         for i in range(len(sv)):
             add_keys2(V[i], gamma[i], sv[i], XMR_H)
             scalarmult_key(V[i], V[i], INV_EIGHT)
 
-        for j in range(M):
-            for i in range(N - 1, -1, -1):
-                if j > len(sv):
-                    aL[j * N + i] = ZERO
-                elif sv[j][i//8] & (1 << i % 8):
-                    aL[j * N + i] = ONE
-                else:
-                    aL[j * N + i] = ZERO
-                sc_sub(aR[j * N + i], aL[j * N + i], ONE)
+        num_inp = len(sv)
+
+        def e_xL(idx, d=None, is_a=True):
+            j, i = idx // N, idx % N
+            if j > num_inp:
+                return ZERO if is_a else MINUS_ONE
+            elif sv[j][i//8] & (1 << i % 8):
+                return ONE if is_a else ZERO
+            else:
+                return ZERO if is_a else MINUS_ONE
+
+        aL = KeyVEval(MN, lambda i, d: e_xL(i, d, True))
+        aR = KeyVEval(MN, lambda i, d: e_xL(i, d, False))
 
         hash_cache = hash_vct_to_scalar(None, V)
         while True:
