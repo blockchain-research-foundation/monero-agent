@@ -157,13 +157,6 @@ def sc_gen(dst=None):
     return dst
 
 
-def full_gen(dst=None):
-    dst = _ensure_dst_key(dst)
-    b = crypto.random_bytes(32)
-    copy_key(dst, b)
-    return dst
-
-
 def sc_add(dst, a, b):
     dst = _ensure_dst_key(dst)
     crypto.decodeint_into_noreduce(tmp_sc_1, a)
@@ -989,10 +982,10 @@ class BulletProofBuilder(object):
         tau2 = sc_gen()
 
         add_keys(
-            T1, scalarmult_key(tmp_bf_1, XMR_H, t1), scalarmult_base(tmp_bf_2, tau1)
+            T1, scalarmultH(tmp_bf_1, t1), scalarmult_base(tmp_bf_2, tau1)
         )
         add_keys(
-            T2, scalarmult_key(tmp_bf_1, XMR_H, t2), scalarmult_base(tmp_bf_2, tau2)
+            T2, scalarmultH(tmp_bf_1, t2), scalarmult_base(tmp_bf_2, tau2)
         )
 
         # PAPER LINES 49-51
@@ -1546,7 +1539,7 @@ class BulletProofBuilder(object):
         add_keys(
             L61Left,
             scalarmult_base(_tmp_k_1, proof.taux),
-            scalarmult_key(_tmp_k_2, XMR_H, proof.t),
+            scalarmultH(_tmp_k_2, proof.t),
         )
 
         k = _ensure_dst_key()
@@ -1566,7 +1559,7 @@ class BulletProofBuilder(object):
         sc_muladd(tmp, z, ip1y, k)
 
         L61Right = _ensure_dst_key()
-        scalarmult_key(L61Right, XMR_H, tmp)
+        scalarmultH(L61Right, tmp)
         scalarmult_key(tmp, proof.V[0], zsq)
         add_keys(L61Right, L61Right, tmp)
 
@@ -1660,11 +1653,11 @@ class BulletProofBuilder(object):
             add_keys(pprime, pprime, tmp)
 
         sc_mul(tmp, proof.t, x_ip)
-        add_keys(pprime, pprime, scalarmult_key(_tmp_k_1, XMR_H, tmp))
+        add_keys(pprime, pprime, scalarmultH(_tmp_k_1, tmp))
 
         sc_mul(tmp, proof.a, proof.b)
         sc_mul(tmp, tmp, x_ip)
-        scalarmult_key(tmp, XMR_H, tmp)
+        scalarmultH(tmp, tmp)
         add_keys(tmp, tmp, inner_prod)
         self.gc(64)
 
@@ -1856,7 +1849,7 @@ class BulletProofBuilder(object):
         # now check all proofs at once
         check1 = _ensure_dst_key()
         scalarmult_base(check1, y0)
-        add_keys(check1, check1, scalarmult_key(None, XMR_H, y1))
+        add_keys(check1, check1, scalarmultH(None, y1))
         sub_keys(check1, check1, Y2)
         sub_keys(check1, check1, Y3)
         sub_keys(check1, check1, Y4)
