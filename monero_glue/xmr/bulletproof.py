@@ -1301,10 +1301,14 @@ class BulletProofBuilder(object):
         self.gc(15)
 
         r0 = vector_add(aR, zMN)
+        del(zMN)
+
         yMN = vector_powers(y, MN)
         hadamard(r0, yMN, dst=r0)
         vector_add(r0, zero_twos, dst=r0)
+        del(zero_twos)
         r1 = hadamard(yMN, sR)
+        del(yMN, sR)
         self.gc(16)
 
         # Polynomial construction before PAPER LINE 46
@@ -1312,15 +1316,17 @@ class BulletProofBuilder(object):
         t1_2 = inner_product(l1, r0)
         t1 = sc_add(None, t1_1, t1_2)
         t2 = inner_product(l1, r1)
+        del(t1_1, t1_2)
 
         # PAPER LINES 47-48
         tau1, tau2 = sc_gen(), sc_gen()
         T1, T2 = _ensure_dst_key(), _ensure_dst_key()
 
-        add_keys(T1, scalarmult_key(tmp_bf_1, XMR_H, t1), scalarmult_base(tmp_bf_2, tau1))
+        add_keys(T1, scalarmultH(tmp_bf_1, t1), scalarmult_base(tmp_bf_2, tau1))
         scalarmult_key(T1, T1, INV_EIGHT)
-        add_keys(T2, scalarmult_key(tmp_bf_1, XMR_H, t2), scalarmult_base(tmp_bf_2, tau2))
+        add_keys(T2, scalarmultH(tmp_bf_1, t2), scalarmult_base(tmp_bf_2, tau2))
         scalarmult_key(T2, T2, INV_EIGHT)
+        del(t1, t2)
         self.gc(17)
 
         # PAPER LINES 49-51
@@ -1336,17 +1342,21 @@ class BulletProofBuilder(object):
         xsq = _ensure_dst_key()
         sc_mul(xsq, x, x)
         sc_muladd(taux, tau2, xsq, taux)
+        del(xsq, tau1, tau2)
         for j in range(1, len(V) + 1):
             sc_muladd(taux, zpow[j+1], gamma[j-1], taux)
+        del(zpow)
 
         self.gc(18)
         mu = _ensure_dst_key()
         sc_muladd(mu, x, rho, alpha)
+        del(rho, alpha)
 
         # PAPER LINES 54-57
-        l = vector_add(l0, vector_scalar(l1, x))
-        r = vector_add(r0, vector_scalar(r1, x))
+        l = vector_add(l0, vector_scalar(l1, x), l0)
+        r = vector_add(r0, vector_scalar(r1, x), r0)
         t = inner_product(l, r)
+        del(l1, r1, sL)
         self.gc(19)
 
         # PAPER LINES 32-33
@@ -1375,6 +1385,7 @@ class BulletProofBuilder(object):
         w = _ensure_dst_keyvect(None, logMN)  # this is the challenge x in the inner product protocol
         cL = _ensure_dst_key()
         cR = _ensure_dst_key()
+        winv = _ensure_dst_key()
         tmp = _ensure_dst_key()
 
         round = 0
@@ -1408,7 +1419,6 @@ class BulletProofBuilder(object):
                 bprime.slice(_tmp_vct_2, 0, nprime),
                 cR,
             )
-
             self.gc(23)
 
             # PAPER LINES 18-19
@@ -1444,7 +1454,7 @@ class BulletProofBuilder(object):
                 return 0,
 
             # PAPER LINES 24-25
-            winv = invert(None, w[round])
+            invert(winv, w[round])
             self.gc(26)
 
             vector_scalar2(Gprime.slice(_tmp_vct_1, 0, nprime), winv, _tmp_vct_3)
@@ -1452,6 +1462,7 @@ class BulletProofBuilder(object):
                 Gprime.slice(_tmp_vct_2, nprime, len(Gprime)), w[round], _tmp_vct_4
             )
             hadamard2(_tmp_vct_3, _tmp_vct_4, Gprime)
+            Gprime.resize(nprime, chop=True)
             self.gc(27)
 
             vector_scalar2(Hprime.slice(_tmp_vct_1, 0, nprime), w[round], _tmp_vct_3)
@@ -1459,6 +1470,7 @@ class BulletProofBuilder(object):
                 Hprime.slice(_tmp_vct_2, nprime, len(Hprime)), winv, _tmp_vct_4
             )
             hadamard2(_tmp_vct_3, _tmp_vct_4, Hprime)
+            Hprime.resize(nprime, chop=True)
             self.gc(28)
 
             # PAPER LINES 28-29
@@ -1467,6 +1479,7 @@ class BulletProofBuilder(object):
                 aprime.slice(_tmp_vct_2, nprime, len(aprime)), winv, _tmp_vct_4
             )
             vector_add(_tmp_vct_3, _tmp_vct_4, aprime)
+            aprime.resize(nprime, chop=True)
             self.gc(29)
 
             vector_scalar(bprime.slice(_tmp_vct_1, 0, nprime), winv, _tmp_vct_3)
@@ -1474,6 +1487,7 @@ class BulletProofBuilder(object):
                 bprime.slice(_tmp_vct_2, nprime, len(bprime)), w[round], _tmp_vct_4
             )
             vector_add(_tmp_vct_3, _tmp_vct_4, bprime)
+            bprime.resize(nprime, chop=True)
 
             round += 1
             self.gc(30)
@@ -1533,7 +1547,7 @@ class BulletProofBuilder(object):
         k = _ensure_dst_key()
         yN = vector_powers(y, BP_N)
         ip1y = inner_product(self.oneN, yN)
-        del yN
+        del(yN)
 
         zsq = _ensure_dst_key()
         sc_mul(zsq, z, z)
@@ -1563,11 +1577,7 @@ class BulletProofBuilder(object):
         if L61Right != L61Left:
             raise ValueError("Verification failure 1")
 
-        del k
-        del ip1y
-        del zcu
-        del L61Left
-        del L61Right
+        del(k, ip1y, zcu, L61Left, L61Right)
 
         # PAPER LINE 62
         P = _ensure_dst_key()
@@ -1626,8 +1636,7 @@ class BulletProofBuilder(object):
                 sc_mul(ypow, ypow, y)
             self.gc(62)
 
-        del g_scalar
-        del h_scalar
+        del(g_scalar, h_scalar)
         self.gc(63)
 
         # PAPER LINE 26
