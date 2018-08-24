@@ -26,6 +26,8 @@ BP_M = 16  # maximal number of bulletproofs
 ZERO = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 ONE = b"\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 TWO = b"\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+EIGHT = b"\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+INV_EIGHT = b"\x79\x2f\xdc\xe2\x29\xe5\x06\x61\xd0\xda\x1c\x7d\xb3\x9d\xd3\x07\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x06"
 MINUS_ONE = b"\xec\xd3\xf5\x5c\x1a\x63\x12\x58\xd6\x9c\xf7\xa2\xde\xf9\xde\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10"
 MINUS_INV_EIGHT = b"\x74\xa4\x19\x7a\xf0\x7d\x0b\xf7\x05\xc2\xda\x25\x2b\x5c\x0b\x0d\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0a"
 
@@ -82,6 +84,11 @@ def copy_vector(dst, src):
     for i in range(len(src)):
         copy_key(dst[i], src[i])
     return dst
+
+
+def init_key(val, dst=None):
+    dst = _ensure_dst_key(dst)
+    return copy_key(dst, val)
 
 
 def invert(dst, x):
@@ -213,6 +220,15 @@ def hash_to_scalar(dst, data):
     dst = _ensure_dst_key(dst)
     crypto.hash_to_scalar_into(tmp_sc_1, data)
     crypto.encodeint_into(tmp_sc_1, dst)
+    return dst
+
+
+def hash_vct_to_scalar(dst, data):  # TODO: frag-optim
+    dst = _ensure_dst_key(dst)
+    ctx = crypto.get_keccak()
+    for x in data:
+        ctx.update(x)
+    crypto.encodeint_into(dst, crypto.decodeint(ctx.digest()))
     return dst
 
 
@@ -376,9 +392,8 @@ def consume_vct(vct):
 def vector_exponent_custom(A, B, a, b, dst=None):
     dst = _ensure_dst_key(dst)
 
-    crypto.sc_init_into(tmp_sc_1, 0)
-    crypto.scalarmult_base_into(tmp_pt_1, tmp_sc_1)  # identity set
-    crypto.scalarmult_base_into(tmp_pt_2, tmp_sc_1)
+    crypto.identity_into(tmp_pt_1)
+    crypto.identity_into(tmp_pt_2)
 
     for i in range(len(a)):
         crypto.decodeint_into_noreduce(tmp_sc_1, a[i])
@@ -404,7 +419,7 @@ def vector_powers(x, n, dst=None):
     return dst
 
 
-def vector_power_sum(x, n, dst=None):
+def vector_power_sum(x, n, dst=None):  # TODO: frag-optim
     dst = _ensure_dst_key(dst)
     if n == 0:
         return copy_key(dst, ZERO)
@@ -535,6 +550,10 @@ def key2buff(hx):
     for i in hx:
         hxs += b"\\x%02x" % i
     return hxs
+
+
+def is_reduced(sc):
+    return crypto.encodeint(crypto.decodeint(sc)) == sc
 
 
 def init_constants():
