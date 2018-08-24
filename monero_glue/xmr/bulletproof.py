@@ -911,12 +911,14 @@ class BulletProofBuilder(object):
         # PAPER LINES 38-39
         alpha = sc_gen()
         ve = _ensure_dst_key()
-        self.vector_exponent(self.v_aL, self.v_aR, ve)
+        Gprec = self._gprec_aux(BP_N)
+        Hprec = self._hprec_aux(BP_N)
+        vector_exponent_custom(Gprec, Hprec, self.v_aL, self.v_aR, ve)
         add_keys(A, ve, scalarmult_base(tmp_bf_1, alpha))
 
         # PAPER LINES 40-42
         rho = sc_gen()
-        self.vector_exponent(self.v_sL, self.v_sR, ve)
+        vector_exponent_custom(Gprec, Hprec, self.v_sL, self.v_sR, ve)
         add_keys(S, ve, scalarmult_base(tmp_bf_1, rho))
 
         # PAPER LINES 43-45
@@ -1044,12 +1046,14 @@ class BulletProofBuilder(object):
         yinv = invert(None, y)
         self.gc(20)
 
-        yinvpow = _ensure_dst_key()
-        copy_key(yinvpow, ONE)
+        yinvpow = init_key(ONE)
+        Gprec = self._gprec_aux(BP_N)
+        Hprec = self._hprec_aux(BP_N)
         for i in range(BP_N):
-            Gprime[i] = self.Gprec[i]
-            scalarmult_key(Hprime[i], self.Hprec[i], yinvpow)
+            Gprime[i] = Gprec[i]
+            scalarmult_key(Hprime[i], Hprec[i], yinvpow)
             sc_mul(yinvpow, yinvpow, yinv)
+        del(Gprec, Hprec)
         self.gc(21)
 
         round = 0
@@ -1608,6 +1612,8 @@ class BulletProofBuilder(object):
         g_scalar = _ensure_dst_key()
         h_scalar = _ensure_dst_key()
         twoN = self._two_aux(BP_N)
+        Gprec = self._gprec_aux(BP_N)
+        Hprec = self._hprec_aux(BP_N)
         for i in range(BP_N):
             copy_key(g_scalar, proof.a)
             sc_mul(h_scalar, proof.b, yinvpow)
@@ -1630,7 +1636,7 @@ class BulletProofBuilder(object):
 
             # Now compute the basepoint's scalar multiplication
             # Each of these could be written as a multiexp operation instead
-            add_keys3(tmp, g_scalar, self.Gprec[i], h_scalar, self.Hprec[i])
+            add_keys3(tmp, g_scalar, Gprec[i], h_scalar, Hprec[i])
             add_keys(inner_prod, inner_prod, tmp)
 
             if i != BP_N - 1:
@@ -1638,7 +1644,7 @@ class BulletProofBuilder(object):
                 sc_mul(ypow, ypow, y)
             self.gc(62)
 
-        del(g_scalar, h_scalar, twoN)
+        del(g_scalar, h_scalar, twoN, Gprec, Hprec)
         self.gc(63)
 
         # PAPER LINE 26
