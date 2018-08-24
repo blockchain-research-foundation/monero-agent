@@ -117,6 +117,14 @@ def scalarmult_key(dst, P, s):
     return dst
 
 
+def scalarmult8(dst, P):
+    dst = _ensure_dst_key(dst)
+    crypto.decodepoint_into(tmp_pt_1, P)
+    crypto.ge_mul8_into(tmp_pt_2, tmp_pt_1)
+    crypto.encodepoint_into(tmp_pt_2, dst)
+    return dst
+
+
 def scalarmult_base(dst, x):
     dst = _ensure_dst_key(dst)
     crypto.decodeint_into_noreduce(tmp_sc_1, x)
@@ -195,6 +203,15 @@ def add_keys(dst, A, B):
     return dst
 
 
+def sub_keys(dst, A, B):
+    dst = _ensure_dst_key(dst)
+    crypto.decodepoint_into(tmp_pt_1, A)
+    crypto.decodepoint_into(tmp_pt_2, B)
+    crypto.point_sub_into(tmp_pt_3, tmp_pt_1, tmp_pt_2)
+    crypto.encodepoint_into(tmp_pt_3, dst)
+    return dst
+
+
 def add_keys2(dst, a, b, B):
     dst = _ensure_dst_key(dst)
     crypto.decodeint_into_noreduce(tmp_sc_1, a)
@@ -228,7 +245,7 @@ def hash_vct_to_scalar(dst, data):  # TODO: frag-optim
     ctx = crypto.get_keccak()
     for x in data:
         ctx.update(x)
-    crypto.encodeint_into(dst, crypto.decodeint(ctx.digest()))
+    crypto.encodeint_into(crypto.decodeint(ctx.digest()), dst)
     return dst
 
 
@@ -428,8 +445,7 @@ def vector_power_sum(x, n, dst=None):  # TODO: frag-optim
     if n == 1:
         return dst
 
-    prev = _ensure_dst_key()
-    copy_key(prev, x)
+    prev = init_key(x)
     for i in range(1, n):
         if i > 1:
             sc_mul(prev, prev, x)
@@ -588,7 +604,7 @@ class MultiExp(object):
 
     def add_scalar(self, scalar):
         self.scalars.append(scalar)
-        self.size = len(self.points)
+        self.size = len(self.scalars)
 
     def get_idx(self, idx):
         dst_scalar = None
@@ -678,9 +694,6 @@ class MergedMultiExp(object):
 
 
 def multiexp(dst=None, data=None, GiHi=False):
-    if GiHi:
-        raise ValueError('Not supported')
-
     dst = _ensure_dst_key(dst)
     crypto.identity_into(tmp_pt_1)
     for i in range(len(data)):
