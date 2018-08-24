@@ -803,25 +803,19 @@ class BulletProofBuilder(object):
         self.gamma_enc = crypto.encodeint(mask)
         self.proof_sec = crypto.random_bytes(64)
 
-    def aL(self, i, dst=None):
+    def aX(self, i, dst=None, is_a=True):
         dst = _ensure_dst_key(dst)
         if self.value_enc[i // 8] & (1 << (i % 8)):
-            copy_key(dst, ONE)
+            copy_key(dst, ONE if is_a else ZERO)
         else:
-            copy_key(dst, ZERO)
-        return dst
-
-    def aR(self, i, dst=None):
-        dst = _ensure_dst_key(dst)
-        self.aL(i, tmp_bf_1)
-        sc_sub(dst, tmp_bf_1, ONE)
+            copy_key(dst, ZERO if is_a else MINUS_ONE)
         return dst
 
     def aL_vct(self):
-        return KeyVEval(64, lambda x, r: self.aL(x, r))
+        return KeyVEval(64, lambda x, r: self.aX(x, r, True))
 
     def aR_vct(self):
-        return KeyVEval(64, lambda x, r: self.aR(x, r))
+        return KeyVEval(64, lambda x, r: self.aX(x, r, False))
 
     def _det_mask(self, i, is_sL=True, dst=None):
         dst = _ensure_dst_key(dst)
