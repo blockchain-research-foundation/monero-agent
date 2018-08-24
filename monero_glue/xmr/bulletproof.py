@@ -263,7 +263,8 @@ def hash_vct_to_scalar(dst, data):  # TODO: frag-optim
 def get_exponent(dst, base, idx):
     dst = _ensure_dst_key(dst)
     salt = b"bulletproof"
-    buff = bytearray(len(salt) + 32 + 1)  # assume varint occupies 1 B
+    idx_size = uvarint_size(idx)
+    buff = bytearray(len(salt) + 32 + idx_size)
     memcpy(buff, 0, base, 0, 32)
     memcpy(buff, 32, salt, 0, len(salt))
     dump_uvarint_b_into(idx, buff, 32 + len(salt))
