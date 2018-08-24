@@ -839,26 +839,26 @@ class BulletProofBuilder(object):
     def sR(self, i, dst=None):
         return self._det_mask(i, False, dst)
 
-    def sL_vct(self):
+    def sL_vct(self, ln=64):
         return (
-            KeyVEval(64, lambda x, r: self.sL(x, r))
+            KeyVEval(ln, lambda x, r: self.sL(x, r))
             if self.use_det_masks
-            else self.sX_gen()
+            else self.sX_gen(ln)
         )
 
-    def sR_vct(self):
+    def sR_vct(self, ln=64):
         return (
-            KeyVEval(64, lambda x, r: self.sR(x, r))
+            KeyVEval(ln, lambda x, r: self.sR(x, r))
             if self.use_det_masks
-            else self.sX_gen()
+            else self.sX_gen(ln)
         )
 
-    def sX_gen(self):
-        buff = bytearray(64 * 32)
+    def sX_gen(self, ln=64):
+        buff = bytearray(ln * 32)
         buff_mv = memoryview(buff)
         sc = crypto.new_scalar()
-        for i in range(64):
             crypto.random_scalar_into(sc)
+        for i in range(ln):
             crypto.encodeint_into(sc, buff_mv[i * 32 : (i + 1) * 32])
         return KeyV(buffer=buff)
 
