@@ -858,8 +858,8 @@ class BulletProofBuilder(object):
         buff = bytearray(ln * 32)
         buff_mv = memoryview(buff)
         sc = crypto.new_scalar()
-            crypto.random_scalar_into(sc)
         for i in range(ln):
+            crypto.random_scalar_into(sc)
             crypto.encodeint_into(sc, buff_mv[i * 32 : (i + 1) * 32])
         return KeyV(buffer=buff)
 
